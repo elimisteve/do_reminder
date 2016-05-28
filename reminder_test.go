@@ -52,7 +52,7 @@ func TestRegex(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		descrip, nextRun, err := parseBody("", test.body)
+		descrip, nextRun, _, err := parseBody("", test.body)
 		if err != nil {
 			t.Errorf("Error parsing `%s`: %v", test.body, err)
 			continue
@@ -60,5 +60,21 @@ func TestRegex(t *testing.T) {
 
 		assert.Equal(t, descrip, test.rem.Description, "Description is wrong")
 		assert.Equal(t, nextRun, test.rem.NextRun, "NextRun is wrong")
+	}
+}
+
+func TestRandDur(t *testing.T) {
+	durs := []time.Duration{
+		2 * time.Second,
+		1 * time.Minute,
+		10 * time.Hour,
+	}
+
+	for _, d := range durs {
+		for i := 0; i < 100; i++ {
+			r := randDur(d)
+			assert.True(t, -d.Seconds() <= r.Seconds() && r.Seconds() <= d.Seconds(),
+				"Duration produced that was outside of the desired range")
+		}
 	}
 }

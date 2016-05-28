@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/xml"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"regexp"
@@ -29,6 +30,8 @@ var (
 )
 
 func main() {
+	rand.Seed(time.Now().Unix())
+
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
@@ -46,7 +49,7 @@ func twilioResponse(s string) string {
 	return xml.Header + "<Response>\n" + s + "\n</Response>"
 }
 
-var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(?:@|at)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
+var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
 
 func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 	now := Now()
@@ -57,7 +60,7 @@ func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 
 	// Remind me to _ @ _
 
-	description, nextRun, err := parseBody(from, body)
+	description, nextRun, plusMinus, err := parseBody(from, body)
 	if err != nil {
 		log.Printf("Error parsing incoming message body: %v\n", err)
 		return twilioResponse("")
@@ -71,6 +74,7 @@ func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 		Description: strings.ToUpper(description[0:1]) + description[1:],
 		NextRun:     nextRun,
 		Period:      delta,
+		PlusMinus:   plusMinus,
 
 		Raw:     body,
 		Created: now,
@@ -93,7 +97,7 @@ func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 	return twilioResponse("")
 }
 
-func parseBody(from, body string) (string, time.Time, error) {
+func parseBody(from, body string) (string, time.Time, time.Duration, error) {
 	parts := regexRemindMe.FindStringSubmatch(body)
 	if len(parts) < 3 {
 		err := smsReply(from, "Could not schedule your reminder. Be sure to"+
@@ -102,7 +106,7 @@ func parseBody(from, body string) (string, time.Time, error) {
 		if err != nil {
 			log.Printf("Error sending after failed time parsing: %v\n", err)
 		}
-		return "", time.Time{}, err
+		return "", time.Time{}, 0, err
 	}
 
 	// len(parts) >= 3
@@ -111,15 +115,22 @@ func parseBody(from, body string) (string, time.Time, error) {
 
 	// parts[0] is the entire SMS message; ignore
 	description := parts[1]
-	nextRun, err := parseTime(parts[2], parts[3:])
+	around := (parts[2] == "around")
+	nextRun, err := parseTime(parts[3], parts[4:])
 	if err != nil {
-		return "", time.Time{}, err
+		return "", time.Time{}, 0, err
 	}
 
-	// TODO(elimisteve): Use parts[4:] for more advanced features,
+	// TODO(elimisteve): Use parts[5:] for more advanced features,
 	// like reminders that aren't every day
 
-	return description, nextRun, nil
+	var plusMinus time.Duration
+	if around {
+		// TODO: Make configurable
+		plusMinus = 60 * time.Minute
+	}
+
+	return description, nextRun, plusMinus, nil
 }
 
 func parseTime(t string, times []string) (time.Time, error) {
@@ -187,23 +198,30 @@ type Reminder struct {
 	Description string
 	NextRun     time.Time
 	Period      time.Duration
+	PlusMinus   time.Duration
 
 	Raw     string
 	Created time.Time
 }
 
 // Schedule reminds r.Recipient to do r.Description starting at
-// r.NextRun, then every r.Period after that.
+// r.NextRun, then every r.Period +/- r.PlusMinus after that.
 func (r *Reminder) Schedule() error {
 	go func() {
 		log.Printf("Scheduling *Reminder `%#v`\n", r)
 
+		if r.PlusMinus < 0 {
+			r.PlusMinus *= -1
+		}
+
+		nextRun := r.NextRun.Add(randDur(r.PlusMinus))
+
 		// Sleep till the next run is here
-		dur := max(r.NextRun.Sub(Now()), 0)
+		dur := max(nextRun.Sub(Now()), 0)
 
 		time.Sleep(dur)
 		for {
-			log.Printf("Texting `%s` to remind him/her to `%s` starting now then every `%s` after that\n",
+			log.Printf("Texting `%s` to remind him/her to `%s` starting now then every ~%s after that\n",
 				r.Recipient, r.Description, r.Period)
 
 			err := smsReply(r.Recipient, r.Description)
@@ -211,11 +229,27 @@ func (r *Reminder) Schedule() error {
 				log.Printf("Error reminding `%v` to `%v`\n", r.Recipient, r.Description)
 			}
 
-			<-time.Tick(r.Period)
+			// TODO: Prevent drift. Right now there's nothing stopping
+			// the time at which a reminder runs from drifting 60 mins
+			// every single time!
+			sleep := r.Period + randDur(r.PlusMinus)
+			log.Printf("Text to %s, `%s`, sending again in %s (period: %s)\n",
+				r.Recipient, r.Description, sleep, r.Period)
+			time.Sleep(max(sleep, 0))
 		}
 	}()
 
 	return nil
+}
+
+// randDur returns a random duration r where -d <= r <= d
+func randDur(d time.Duration) time.Duration {
+	randSecs := rand.Intn(int(d.Seconds()))
+	if rand.Intn(2) == 0 { // 50% chance
+		randSecs *= -1
+	}
+
+	return time.Duration(randSecs) * time.Second
 }
 
 func max(n, m time.Duration) time.Duration {
