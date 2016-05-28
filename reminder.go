@@ -46,44 +46,37 @@ func twilioResponse(s string) string {
 	return xml.Header + "<Response>\n" + s + "\n</Response>"
 }
 
-var regexRemindMe = regexp.MustCompile(`^[Rr]emind me to (.+?)\s*@\s*(\d\d:\d\d)\s*(today|tonight|tomorrow|\d\d?/\d\d?)?`)
+var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(?:@|at)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
 
 func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
+	now := Now()
 	from := req.FormValue("From")
 	body := req.FormValue("Body")
 
 	log.Printf("Incoming SMS: `%v: %v`", from, body)
 
 	// Remind me to _ @ _
-	parts := regexRemindMe.FindStringSubmatch(body)
-	if len(parts) < 2 {
-		err := smsReply(from, "Could not schedule your reminder. Be sure to"+
-			" use military time (24-hour time) when saying something like,"+
-			"\n\nRemind me to take out the trash @ 18:00")
-		if err != nil {
-			log.Printf("Error sending after failed time parsing: %v\n", err)
-		}
+
+	description, nextRun, err := parseBody(from, body)
+	if err != nil {
+		log.Printf("Error parsing incoming message body: %v\n", err)
 		return twilioResponse("")
 	}
 
-	// len(parts) >= 2
-
-	// parts[0] is the entire SMS message; ignore
-	description := parts[1]
-	delay := parseTime(parts[2])
-
 	// TODO(elimisteve): Make this configurable
-	epsilon := 24 * time.Hour
+	delta := 24 * time.Hour
 
 	reminder := &Reminder{
-		Raw:          body,
-		Recipient:    from,
-		Description:  description,
-		InitialDelay: delay,
-		Period:       epsilon,
+		Recipient:   from,
+		Description: strings.ToUpper(description[0:1]) + description[1:],
+		NextRun:     nextRun,
+		Period:      delta,
+
+		Raw:     body,
+		Created: now,
 	}
 
-	err := reminder.Schedule()
+	err = reminder.Schedule()
 	if err != nil {
 		err2 := smsReply(from, "Error scheduling your reminder. Sorry!")
 		if err2 != nil {
@@ -100,27 +93,79 @@ func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 	return twilioResponse("")
 }
 
-func parseTime(t string) time.Duration {
+func parseBody(from, body string) (string, time.Time, error) {
+	parts := regexRemindMe.FindStringSubmatch(body)
+	if len(parts) < 3 {
+		err := smsReply(from, "Could not schedule your reminder. Be sure to"+
+			" use military time (24-hour time) when saying something like,"+
+			"\n\nRemind me to take out the trash @ 18:00")
+		if err != nil {
+			log.Printf("Error sending after failed time parsing: %v\n", err)
+		}
+		return "", time.Time{}, err
+	}
+
+	// len(parts) >= 3
+
+	// log.Printf("parts == %#v\n", parts)
+
+	// parts[0] is the entire SMS message; ignore
+	description := parts[1]
+	nextRun, err := parseTime(parts[2], parts[3:])
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	// TODO(elimisteve): Use parts[4:] for more advanced features,
+	// like reminders that aren't every day
+
+	return description, nextRun, nil
+}
+
+func parseTime(t string, times []string) (time.Time, error) {
 	when := strings.SplitN(t, ":", 2)
 	hours, _ := strconv.Atoi(when[0])
 	mins, _ := strconv.Atoi(when[1])
 
+	var nextRun time.Time
+
 	now := Now()
-	nowHours, nowMins, nowSecs := now.Clock()
-	today := now.
-		Add(time.Duration(-nowHours) * time.Hour).
-		Add(time.Duration(-nowMins) * time.Minute).
-		Add(time.Duration(-nowSecs) * time.Second)
 
-	nextRun := today.
-		Add(time.Duration(hours) * time.Hour).
-		Add(time.Duration(mins) * time.Minute)
+	if len(times) == 0 || times[0] == "today" || times[0] == "tonight" || times[0] == "tomorrow" || times[0] == "" {
+		nowHours, nowMins, nowSecs := now.Clock()
+		today := now.
+			Add(time.Duration(-nowHours) * time.Hour).
+			Add(time.Duration(-nowMins) * time.Minute).
+			Add(time.Duration(-nowSecs) * time.Second)
 
-	if nextRun.Before(now) {
-		nextRun = nextRun.Add(24 * time.Hour)
+		nextRun = today.
+			Add(time.Duration(hours) * time.Hour).
+			Add(time.Duration(mins) * time.Minute)
+
+		if nextRun.Before(now) || (len(times) > 0 && times[0] == "tomorrow") {
+			// Tomorrow
+			nextRun = nextRun.Add(24 * time.Hour)
+		}
+
+		return nextRun, nil
 	}
 
-	return nextRun.Sub(now)
+	// Guaranteed: times[0] is of the form `\d?\d/\d?\d`
+
+	monthDay := strings.SplitN(times[0], "/", 2)
+	month, _ := strconv.Atoi(monthDay[0])
+	day, _ := strconv.Atoi(monthDay[1])
+
+	nextRun = time.Date(now.Year(), time.Month(month), day,
+		hours, mins, 0, 0, LosAngeles)
+
+	if nextRun.Before(now) {
+		// Next year
+		nextRun = time.Date(now.Year()+1, time.Month(month), day,
+			hours, mins, 0, 0, LosAngeles)
+	}
+
+	return nextRun, nil
 }
 
 func Now() time.Time {
@@ -138,22 +183,25 @@ func smsReply(recipient, replyBody string) error {
 //
 
 type Reminder struct {
-	Raw          string
-	Recipient    string
-	Description  string
-	InitialDelay time.Duration
-	Period       time.Duration
+	Recipient   string
+	Description string
+	NextRun     time.Time
+	Period      time.Duration
+
+	Raw     string
+	Created time.Time
 }
 
-// Schedule reminds recipient to do description starting at nextRun then
-// every epsilon after that
+// Schedule reminds r.Recipient to do r.Description starting at
+// r.NextRun, then every r.Period after that.
 func (r *Reminder) Schedule() error {
-	r.Description = strings.ToUpper(r.Description[0:1]) + r.Description[1:]
-
 	go func() {
 		log.Printf("Scheduling *Reminder `%#v`\n", r)
 
-		time.Sleep(r.InitialDelay)
+		// Sleep till the next run is here
+		dur := max(r.NextRun.Sub(Now()), 0)
+
+		time.Sleep(dur)
 		for {
 			log.Printf("Texting `%s` to remind him/her to `%s` starting now then every `%s` after that\n",
 				r.Recipient, r.Description, r.Period)
@@ -168,4 +216,11 @@ func (r *Reminder) Schedule() error {
 	}()
 
 	return nil
+}
+
+func max(n, m time.Duration) time.Duration {
+	if n > m {
+		return n
+	}
+	return m
 }
