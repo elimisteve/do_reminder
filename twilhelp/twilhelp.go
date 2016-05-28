@@ -20,13 +20,13 @@ var (
 
 func init() {
 	if twilioAccount == "" {
-		log.Fatalln("TWILIO_ACCOUNT not set")
+		log.Println("TWILIO_ACCOUNT not set")
 	}
 	if twilioKey == "" {
-		log.Fatalln("TWILIO_KEY not set")
+		log.Println("TWILIO_KEY not set")
 	}
 	if fromNumber == "" {
-		log.Fatalln("FROM_NUMBER not set")
+		log.Println("FROM_NUMBER not set")
 	}
 }
 
