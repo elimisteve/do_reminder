@@ -52,7 +52,7 @@ func TestRegex(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		descrip, nextRun, _, err := parseBody("", test.body)
+		descrip, nextRun, _, err := parseBody(test.body)
 		if err != nil {
 			t.Errorf("Error parsing `%s`: %v", test.body, err)
 			continue

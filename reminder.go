@@ -5,26 +5,20 @@ package main
 
 import (
 	"encoding/xml"
+	"errors"
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/codegangsta/martini"
-	"github.com/subosito/twilio"
+	"github.com/elimisteve/do_reminder/twilhelp"
 )
 
 var (
-	twilioAccount = os.Getenv("TWILIO_ACCOUNT")
-	twilioKey     = os.Getenv("TWILIO_KEY")
-	myNumber      = os.Getenv("FROM_NUMBER")
-
-	tc = twilio.NewClient(twilioAccount, twilioKey, nil)
-
 	// TODO(elimisteve): Make timezone user-specific
 	LosAngeles, _ = time.LoadLocation("America/Los_Angeles")
 )
@@ -38,8 +32,6 @@ func main() {
 	m.Use(martini.Recovery())
 	m.Action(r.Handle)
 
-	m.Map(tc)
-
 	r.Post("/sms", incomingSMS)
 
 	m.Run()
@@ -51,7 +43,7 @@ func twilioResponse(s string) string {
 
 var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
 
-func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
+func incomingSMS(req *http.Request, log *log.Logger) string {
 	now := Now()
 	from := req.FormValue("From")
 	body := req.FormValue("Body")
@@ -60,7 +52,7 @@ func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 
 	// Remind me to _ @ _
 
-	description, nextRun, plusMinus, err := parseBody(from, body)
+	description, nextRun, plusMinus, err := parseBody(body)
 	if err != nil {
 		log.Printf("Error parsing incoming message body: %v\n", err)
 		return twilioResponse("")
@@ -82,14 +74,14 @@ func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 
 	err = reminder.Schedule()
 	if err != nil {
-		err2 := smsReply(from, "Error scheduling your reminder. Sorry!")
+		err2 := twilhelp.SendSMS(from, "Error scheduling your reminder. Sorry!")
 		if err2 != nil {
 			log.Printf("Error after successful parse but failed scheduling: %v\n", err2)
 		}
 		return twilioResponse("")
 	}
 
-	err = smsReply(from, "Reminder successfully scheduled! Have a great day :-)")
+	err = twilhelp.SendSMS(from, "Reminder successfully scheduled! Have a great day :-)")
 	if err != nil {
 		log.Printf("Error from post-successful scheduling send: %v\n", err)
 	}
@@ -97,15 +89,13 @@ func incomingSMS(tc *twilio.Client, req *http.Request, log *log.Logger) string {
 	return twilioResponse("")
 }
 
-func parseBody(from, body string) (string, time.Time, time.Duration, error) {
+func parseBody(body string) (string, time.Time, time.Duration, error) {
 	parts := regexRemindMe.FindStringSubmatch(body)
 	if len(parts) < 3 {
-		err := smsReply(from, "Could not schedule your reminder. Be sure to"+
-			" use military time (24-hour time) when saying something like,"+
+		err := errors.New("Could not schedule your reminder. Be sure to" +
+			" use military time (24-hour time) when saying something like," +
 			"\n\nRemind me to take out the trash @ 18:00")
-		if err != nil {
-			log.Printf("Error sending after failed time parsing: %v\n", err)
-		}
+		log.Printf("Error sending after failed time parsing: %v\n", err)
 		return "", time.Time{}, 0, err
 	}
 
@@ -183,12 +173,6 @@ func Now() time.Time {
 	return time.Now().In(LosAngeles).Round(time.Second)
 }
 
-func smsReply(recipient, replyBody string) error {
-	params := twilio.MessageParams{Body: replyBody}
-	_, _, err := tc.Messages.Send(myNumber, recipient, params)
-	return err
-}
-
 //
 // Types
 //
@@ -224,7 +208,7 @@ func (r *Reminder) Schedule() error {
 			log.Printf("Texting `%s` to remind him/her to `%s` starting now then every ~%s after that\n",
 				r.Recipient, r.Description, r.Period)
 
-			err := smsReply(r.Recipient, r.Description)
+			err := twilhelp.SendSMS(r.Recipient, r.Description)
 			if err != nil {
 				log.Printf("Error reminding `%v` to `%v`\n", r.Recipient, r.Description)
 			}
