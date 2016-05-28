@@ -244,6 +244,9 @@ func (r *Reminder) Schedule() error {
 
 // randDur returns a random duration r where -d <= r <= d
 func randDur(d time.Duration) time.Duration {
+	if d == 0 {
+		return d
+	}
 	randSecs := rand.Intn(int(d.Seconds()))
 	if rand.Intn(2) == 0 { // 50% chance
 		randSecs *= -1

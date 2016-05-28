@@ -65,6 +65,7 @@ func TestRegex(t *testing.T) {
 
 func TestRandDur(t *testing.T) {
 	durs := []time.Duration{
+		0 * time.Millisecond,
 		2 * time.Second,
 		1 * time.Minute,
 		10 * time.Hour,
