@@ -11,30 +11,30 @@ import (
 )
 
 var (
-	twilioAccount = os.Getenv("TWILIO_ACCOUNT")
-	twilioKey     = os.Getenv("TWILIO_KEY")
-	fromNumber    = os.Getenv("FROM_NUMBER")
+	TwilioAccount = os.Getenv("TWILIO_ACCOUNT")
+	TwilioKey     = os.Getenv("TWILIO_KEY")
+	FromNumber    = os.Getenv("FROM_NUMBER")
 
-	tc = twilio.NewClient(twilioAccount, twilioKey, nil)
+	tc = twilio.NewClient(TwilioAccount, TwilioKey, nil)
 )
 
 func init() {
-	if twilioAccount == "" {
+	if TwilioAccount == "" {
 		log.Println("TWILIO_ACCOUNT not set")
 	}
-	if twilioKey == "" {
+	if TwilioKey == "" {
 		log.Println("TWILIO_KEY not set")
 	}
-	if fromNumber == "" {
+	if FromNumber == "" {
 		log.Println("FROM_NUMBER not set")
 	}
 }
 
-func SendSMS(toNumber, replyBody string) error {
+func SendSMS(toNumber, msg string) error {
 	if len(toNumber) == 10 {
 		toNumber = "+1" + toNumber
 	}
-	params := twilio.MessageParams{Body: replyBody}
-	_, _, err := tc.Messages.Send(fromNumber, toNumber, params)
+	params := twilio.MessageParams{Body: msg}
+	_, _, err := tc.Messages.Send(FromNumber, toNumber, params)
 	return err
 }
