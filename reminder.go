@@ -198,7 +198,7 @@ func (r *Reminder) Schedule() error {
 			r.PlusMinus *= -1
 		}
 
-		nextRun := r.NextRun.Add(randDur(r.PlusMinus))
+		nextRun := r.NextRun.Add(twilhelp.RandDuration(r.PlusMinus))
 
 		// Sleep till the next run is here
 		dur := max(nextRun.Sub(Now()), 0)
@@ -216,7 +216,7 @@ func (r *Reminder) Schedule() error {
 			// TODO: Prevent drift. Right now there's nothing stopping
 			// the time at which a reminder runs from drifting 60 mins
 			// every single time!
-			sleep := r.Period + randDur(r.PlusMinus)
+			sleep := r.Period + twilhelp.RandDuration(r.PlusMinus)
 			log.Printf("Text to %s, `%s`, sending again in %s (period: %s)\n",
 				r.Recipient, r.Description, sleep, r.Period)
 			time.Sleep(max(sleep, 0))
@@ -224,23 +224,6 @@ func (r *Reminder) Schedule() error {
 	}()
 
 	return nil
-}
-
-// randDur returns a random duration r where -d <= r <= d
-func randDur(d time.Duration) time.Duration {
-	if d == 0 {
-		return d
-	}
-	if d < 0 {
-		d *= -1
-	}
-
-	randSecs := rand.Intn(int(d.Seconds()))
-	if rand.Intn(2) == 0 { // 50% chance
-		randSecs *= -1
-	}
-
-	return time.Duration(randSecs) * time.Second
 }
 
 func max(n, m time.Duration) time.Duration {

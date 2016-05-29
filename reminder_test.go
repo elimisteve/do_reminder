@@ -62,24 +62,3 @@ func TestRegex(t *testing.T) {
 		assert.Equal(t, nextRun, test.rem.NextRun, "NextRun is wrong")
 	}
 }
-
-func TestRandDur(t *testing.T) {
-	durs := []time.Duration{
-		-5 * time.Second,
-		0 * time.Second,
-		2 * time.Second,
-		1 * time.Minute,
-		10 * time.Hour,
-	}
-
-	for _, d := range durs {
-		for i := 0; i < 100; i++ {
-			r := randDur(d)
-			if d < 0 {
-				d *= -1
-			}
-			assert.True(t, -d.Seconds() <= r.Seconds() && r.Seconds() <= d.Seconds(),
-				"Duration produced that was outside of the desired range")
-		}
-	}
-}
