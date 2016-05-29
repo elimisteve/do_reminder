@@ -219,7 +219,7 @@ func (r *Reminder) Schedule() error {
 			sleep := r.Period + twilhelp.RandDuration(r.PlusMinus)
 			log.Printf("Text to %s, `%s`, sending again in %s (period: %s)\n",
 				r.Recipient, r.Description, sleep, r.Period)
-			time.Sleep(max(sleep, 0))
+			time.Sleep(max(sleep, -sleep))
 		}
 	}()
 
