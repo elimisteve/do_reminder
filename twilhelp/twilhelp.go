@@ -28,6 +28,10 @@ func init() {
 	if FromNumber == "" {
 		log.Println("FROM_NUMBER not set")
 	}
+
+	if len(FromNumber) == 10 {
+		FromNumber = "+1" + FromNumber
+	}
 }
 
 func SendSMS(toNumber, msg string) error {
