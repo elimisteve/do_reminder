@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/codegangsta/martini"
+	"github.com/elimisteve/do_reminder/remind"
 	"github.com/elimisteve/do_reminder/twilhelp"
 )
 
@@ -24,7 +25,7 @@ var (
 )
 
 func main() {
-	rand.Seed(time.Now().Unix())
+	rand.Seed(twilhelp.Now().Unix())
 
 	r := martini.NewRouter()
 	m := martini.New()
@@ -44,7 +45,7 @@ func twilioResponse(s string) string {
 var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
 
 func incomingSMS(req *http.Request, log *log.Logger) string {
-	now := Now()
+	now := twilhelp.Now()
 	from := req.FormValue("From")
 	body := req.FormValue("Body")
 
@@ -61,7 +62,7 @@ func incomingSMS(req *http.Request, log *log.Logger) string {
 	// TODO(elimisteve): Make this configurable
 	delta := 24 * time.Hour
 
-	reminder := &Reminder{
+	reminder := &remind.Reminder{
 		Recipient:   from,
 		Description: strings.ToUpper(description[0:1]) + description[1:],
 		NextRun:     nextRun,
@@ -130,7 +131,7 @@ func parseTime(t string, times []string) (time.Time, error) {
 
 	var nextRun time.Time
 
-	now := Now()
+	now := twilhelp.Now()
 
 	if len(times) == 0 || times[0] == "today" || times[0] == "tonight" || times[0] == "tomorrow" || times[0] == "" {
 		nowHours, nowMins, nowSecs := now.Clock()
@@ -167,68 +168,4 @@ func parseTime(t string, times []string) (time.Time, error) {
 	}
 
 	return nextRun, nil
-}
-
-func Now() time.Time {
-	return time.Now().In(LosAngeles).Round(time.Second)
-}
-
-//
-// Types
-//
-
-type Reminder struct {
-	Recipient   string
-	Description string
-	NextRun     time.Time
-	Period      time.Duration
-	PlusMinus   time.Duration
-
-	Raw     string
-	Created time.Time
-}
-
-// Schedule reminds r.Recipient to do r.Description starting at
-// r.NextRun, then every r.Period +/- r.PlusMinus after that.
-func (r *Reminder) Schedule() error {
-	go func() {
-		log.Printf("Scheduling *Reminder `%#v`\n", r)
-
-		if r.PlusMinus < 0 {
-			r.PlusMinus *= -1
-		}
-
-		nextRun := r.NextRun.Add(twilhelp.RandDuration(r.PlusMinus))
-
-		// Sleep till the next run is here
-		dur := max(nextRun.Sub(Now()), 0)
-
-		time.Sleep(dur)
-		for {
-			log.Printf("Texting `%s` to remind him/her to `%s` starting now then every ~%s after that\n",
-				r.Recipient, r.Description, r.Period)
-
-			err := twilhelp.SendSMS(r.Recipient, r.Description)
-			if err != nil {
-				log.Printf("Error reminding `%v` to `%v`\n", r.Recipient, r.Description)
-			}
-
-			// TODO: Prevent drift. Right now there's nothing stopping
-			// the time at which a reminder runs from drifting 60 mins
-			// every single time!
-			sleep := r.Period + twilhelp.RandDuration(r.PlusMinus)
-			log.Printf("Text to %s, `%s`, sending again in %s (period: %s)\n",
-				r.Recipient, r.Description, sleep, r.Period)
-			time.Sleep(max(sleep, -sleep))
-		}
-	}()
-
-	return nil
-}
-
-func max(n, m time.Duration) time.Duration {
-	if n > m {
-		return n
-	}
-	return m
 }

@@ -7,19 +7,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/elimisteve/do_reminder/remind"
+	"github.com/elimisteve/do_reminder/twilhelp"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRegex(t *testing.T) {
-	nowYear, nowMonth, nowDay := Now().Date()
+	nowYear, nowMonth, nowDay := twilhelp.Now().Date()
 
 	tests := []struct {
 		body string
-		rem  Reminder
+		rem  remind.Reminder
 	}{
 		{
 			"Remind me to buy milk at 14:45 tomorrow",
-			Reminder{
+			remind.Reminder{
 				Description: "buy milk",
 				NextRun: time.Date(nowYear, nowMonth, nowDay+1,
 					14, 45, 0, 0, LosAngeles),
@@ -27,7 +29,7 @@ func TestRegex(t *testing.T) {
 		},
 		{
 			"Remind me to do $tuFF at 23:59 today",
-			Reminder{
+			remind.Reminder{
 				Description: "do $tuFF",
 				NextRun: time.Date(nowYear, nowMonth, nowDay,
 					23, 59, 0, 0, LosAngeles),
@@ -35,7 +37,7 @@ func TestRegex(t *testing.T) {
 		},
 		{
 			"Remind me to do  whatever at 23:59",
-			Reminder{
+			remind.Reminder{
 				Description: "do  whatever",
 				NextRun: time.Date(nowYear, nowMonth, nowDay,
 					23, 59, 0, 0, LosAngeles),
@@ -43,7 +45,7 @@ func TestRegex(t *testing.T) {
 		},
 		{
 			"  remind me to write_GO/code!!.(?)  @ 23:59 on  12/09",
-			Reminder{
+			remind.Reminder{
 				Description: "write_GO/code!!.(?)",
 				NextRun: time.Date(nowYear, 12, 9,
 					23, 59, 0, 0, LosAngeles),
