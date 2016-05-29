@@ -25,7 +25,7 @@ var (
 )
 
 func main() {
-	rand.Seed(twilhelp.Now().Unix())
+	rand.Seed(remind.Now().Unix())
 
 	r := martini.NewRouter()
 	m := martini.New()
@@ -45,7 +45,7 @@ func twilioResponse(s string) string {
 var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
 
 func incomingSMS(req *http.Request, log *log.Logger) string {
-	now := twilhelp.Now()
+	now := remind.Now()
 	from := req.FormValue("From")
 	body := req.FormValue("Body")
 
@@ -131,7 +131,7 @@ func parseTime(t string, times []string) (time.Time, error) {
 
 	var nextRun time.Time
 
-	now := twilhelp.Now()
+	now := remind.Now()
 
 	if len(times) == 0 || times[0] == "today" || times[0] == "tonight" || times[0] == "tomorrow" || times[0] == "" {
 		nowHours, nowMins, nowSecs := now.Clock()

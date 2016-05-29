@@ -8,12 +8,11 @@ import (
 	"time"
 
 	"github.com/elimisteve/do_reminder/remind"
-	"github.com/elimisteve/do_reminder/twilhelp"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRegex(t *testing.T) {
-	nowYear, nowMonth, nowDay := twilhelp.Now().Date()
+	nowYear, nowMonth, nowDay := remind.Now().Date()
 
 	tests := []struct {
 		body string

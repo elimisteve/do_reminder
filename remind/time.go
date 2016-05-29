@@ -1,7 +1,7 @@
 // Steven Phillips / elimisteve
 // 2016.05.28
 
-package twilhelp
+package remind
 
 import "time"
 

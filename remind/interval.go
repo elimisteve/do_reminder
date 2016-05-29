@@ -8,12 +8,10 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
-
-	"github.com/elimisteve/do_reminder/twilhelp"
 )
 
 func init() {
-	rand.Seed(twilhelp.Now().Unix())
+	rand.Seed(Now().Unix())
 }
 
 // IntervalSMS sends to toNumber each message from msgs throughout the
@@ -54,7 +52,7 @@ func IntervalSMS(toNumber string, msgs []string, start, finish time.Time) ([]*Re
 			Recipient:   toNumber,
 			Description: msg,
 			NextRun:     nextRun,
-			Created:     twilhelp.Now(),
+			Created:     Now(),
 		}
 
 		reminders[i] = &rem

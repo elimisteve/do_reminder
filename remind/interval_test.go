@@ -8,12 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elimisteve/do_reminder/twilhelp"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestIntervalSMS(t *testing.T) {
-	now := twilhelp.Now()
+	now := Now()
 
 	tests := []struct {
 		start, finish time.Time
