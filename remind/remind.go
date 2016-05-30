@@ -89,7 +89,7 @@ func (r *Reminder) Schedule(db *bolt.DB) error {
 		return fmt.Errorf("Reminder cannot have negative period (%v)", r.Period)
 	}
 
-	log.Printf("Valid Reminder %v scheduled\n", r.ID)
+	log.Printf("Valid Reminder %v scheduled: %s\n", r.ID, r)
 
 	if r.NextRun.Before(Now()) {
 		if r.Period == 0 {
@@ -243,7 +243,7 @@ func (r *Reminder) Update(db *bolt.DB) error {
 		return fmt.Errorf("Error updating Reminder %v; db is nil", r.ID)
 	}
 
-	log.Printf("Updating reminder %v\n", r.ID)
+	log.Printf("Updating reminder %v (%s)\n", r.ID, r.Simple())
 
 	return db.Update(func(tx *bolt.Tx) error {
 		rBytes, err := json.Marshal(r)
@@ -280,4 +280,19 @@ func itob(id uint64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, id)
 	return b
+}
+
+func (r *Reminder) String() string {
+	if r == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("&Reminder{ID:%v, Recipient:%q, Description:%q,"+
+		" NextRun:%q, Period:%s, PlusMinus:%s, Cancelled:%v,"+
+		" Created:%q, Raw:%q}", r.ID, r.Recipient, r.Description,
+		r.NextRun, r.Period, r.PlusMinus, r.Cancelled,
+		r.Created, r.Raw)
+}
+
+func (r *Reminder) Simple() string {
+	return fmt.Sprintf("To %s: %q", r.Recipient, r.Description)
 }
