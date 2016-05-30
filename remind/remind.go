@@ -66,33 +66,11 @@ func GetAllReminders(db *bolt.DB) (Reminders, error) {
 // Schedule reminds r.Recipient to do r.Description starting at
 // r.NextRun, then every r.Period +/- r.PlusMinus after that.
 func (r *Reminder) Schedule(db *bolt.DB) error {
-	if r == nil {
-		return errors.New("Cannot schedule nil *Reminder!")
-	}
-
-	if r.Period < 0 {
-		return fmt.Errorf("Reminder cannot have negative period (%v)", r.Period)
+	if err := r.Check(db); err != nil {
+		return err
 	}
 
 	log.Printf("Valid Reminder %v scheduled: %s\n", r.ID, r)
-
-	if r.NextRun.Before(Now()) {
-		if r.Period == 0 {
-			log.Printf("Reminder %v's next run already passed, should have"+
-				" only run once; returning nil\n", r.ID)
-			r.Cancelled = true
-			return r.Update(db)
-		}
-		changed, err := r.FutureizeNextRun()
-		if err != nil {
-			return err
-		}
-		if changed {
-			if err := r.Update(db); err != nil {
-				return err
-			}
-		}
-	}
 
 	go func() {
 		if err := r.RunAndLoop(db); err != nil {
@@ -102,6 +80,32 @@ func (r *Reminder) Schedule(db *bolt.DB) error {
 		log.Printf("Reminder %v stopped looping (no error)\n", r.ID)
 	}()
 
+	return nil
+}
+
+func (r *Reminder) Check(db *bolt.DB) error {
+	if r == nil {
+		return errors.New("Cannot schedule nil *Reminder!")
+	}
+
+	if r.Period < 0 {
+		return fmt.Errorf("Reminder cannot have negative period (%v)", r.Period)
+	}
+	if r.Period == 0 {
+		log.Printf("Reminder %v's next run already passed, should have"+
+			" only run once; returning nil\n", r.ID)
+		r.Cancelled = true
+		return r.Update(db)
+	}
+	changed, err := r.FutureizeNextRun()
+	if err != nil {
+		return err
+	}
+	if changed {
+		if err := r.Update(db); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
