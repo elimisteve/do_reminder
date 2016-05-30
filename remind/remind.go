@@ -110,7 +110,7 @@ func (r *Reminder) Schedule(db *bolt.DB) error {
 	}
 
 	go func() {
-		if err := r.runAndLoop(db); err != nil {
+		if err := r.RunAndLoop(db); err != nil {
 			log.Printf("Error running looping reminder %v: %v\n", r.ID, err)
 			return
 		}
@@ -120,7 +120,7 @@ func (r *Reminder) Schedule(db *bolt.DB) error {
 	return nil
 }
 
-func (r *Reminder) runAndLoop(db *bolt.DB) error {
+func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 	r.NextRun = r.NextRun.Add(RandDuration(r.PlusMinus))
 	if r.PlusMinus != 0 {
 		if err := r.Update(db); err != nil {
@@ -230,6 +230,10 @@ func (r *Reminder) Save(db *bolt.DB) error {
 func (r *Reminder) Update(db *bolt.DB) error {
 	if r == nil {
 		return errors.New("Cannot update nil *Reminder")
+	}
+
+	if db == nil {
+		return fmt.Errorf("Error updating Reminder %v; db is nil", r.ID)
 	}
 
 	log.Printf("Updating reminder %v\n", r.ID)

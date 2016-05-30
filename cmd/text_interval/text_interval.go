@@ -58,10 +58,12 @@ func main() {
 		go func(rem *remind.Reminder) {
 			defer wg.Done()
 
-			if err := rem.Schedule(); err != nil {
-				log.Printf("Error scheduling Reminder %#v: %v\n", rem, err)
+			if err := rem.RunAndLoop(nil); err != nil {
+				log.Printf("Error scheduling Reminder `%v` to %s: %v\n",
+					rem.Description, rem.Recipient, err)
 				return
 			}
+			log.Printf("Reminder `%s` exited cleanly\n", rem.Description)
 		}(rem)
 	}
 
