@@ -82,7 +82,7 @@ func GetAllReminders(db *bolt.DB) (Reminders, error) {
 // r.NextRun, then every r.Period +/- r.PlusMinus after that.
 func (r *Reminder) Schedule(db *bolt.DB) error {
 	if r == nil {
-		errors.New("Cannot schedule nil *Reminder!")
+		return errors.New("Cannot schedule nil *Reminder!")
 	}
 
 	if r.Period < 0 {
