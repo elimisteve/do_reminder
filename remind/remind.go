@@ -36,21 +36,6 @@ type Reminder struct {
 	cancel    chan struct{}
 }
 
-type Reminders []*Reminder
-
-func (rems Reminders) Schedule(db *bolt.DB) []error {
-	var errs []error
-	for _, r := range rems {
-		if r.Cancelled {
-			continue
-		}
-		if err := r.Schedule(db); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errs
-}
-
 func GetAllReminders(db *bolt.DB) (Reminders, error) {
 	var allRems Reminders
 
