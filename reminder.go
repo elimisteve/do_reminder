@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -20,6 +21,10 @@ import (
 	"github.com/codegangsta/martini"
 	"github.com/elimisteve/do_reminder/remind"
 	"github.com/elimisteve/do_reminder/twilhelp"
+)
+
+var (
+	runningReminders = &remind.ActiveReminders{}
 )
 
 func init() {
@@ -41,9 +46,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error getting reminders: %v\n", err)
 	}
-	if err := rems.Schedule(db); err != nil {
-		log.Fatal(err)
-	}
+
+	runningReminders.Add(rems...)
+	runningReminders.Schedule(db)
 
 	//
 	// Router, etc
@@ -75,11 +80,20 @@ func twilioResponse(s string) string {
 // 6: (daily)?
 var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(starting)?\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?\s*(daily)?`)
 
+// 0: (Entire message)
+// 1: Reminder ID
+var regexStopReminder = regexp.MustCompile(`(?:[Ss]top|[Dd]elete)\s*(?:[Rr]eminder)?\s*#?(\d+)`)
+
 func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 	from := req.FormValue("From")
 	body := req.FormValue("Body")
 
 	log.Printf("Incoming SMS: `%v: %v`", from, body)
+
+	parts := regexStopReminder.FindStringSubmatch(body)
+	if len(parts) > 0 {
+		return handleCancel(db, from, parts[1])
+	}
 
 	// Remind me to _ @ _
 
@@ -113,10 +127,39 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 		return twilioResponse("")
 	}
 
-	err = twilhelp.SendSMS(from, "Reminder successfully scheduled! Have a"+
-		" great day :-)")
+	reply := fmt.Sprintf("Reminder %v successfully scheduled! "+
+		"Have a great day :-)", reminder.ID)
+	err = twilhelp.SendSMS(from, reply)
 	if err != nil {
 		log.Printf("Error from post-successful scheduling send: %v\n", err)
+	}
+
+	return twilioResponse("")
+}
+
+func handleCancel(db *bolt.DB, from, idStr string) string {
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		log.Printf("Error parsing Reminder ID: %v\n", err)
+
+		err2 := twilhelp.SendSMS(from, "Error parsing the Reminder ID. Sorry!")
+		if err2 != nil {
+			log.Printf(`Error sending "sorry we couldn't parse" msg: %v\n`, err)
+		}
+
+		return twilioResponse("")
+	}
+
+	if err := runningReminders.Cancel(db, id); err != nil {
+		log.Printf("Error cancelling Reminder %v: %v\n", id, err)
+
+		reply := fmt.Sprintf("Error stopping Reminder %v. Sorry!", id)
+		err2 := twilhelp.SendSMS(from, reply)
+		if err2 != nil {
+			log.Printf(`Error sending "sorry we couldn't cancel" msg: %v\n`, err)
+		}
+
+		return twilioResponse("")
 	}
 
 	return twilioResponse("")

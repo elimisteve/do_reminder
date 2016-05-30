@@ -186,7 +186,11 @@ func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 }
 
 func (r *Reminder) SendSMS() error {
-	return twilhelp.SendSMS(r.Recipient, r.Description)
+	prefix := ""
+	if r.ID != 0 {
+		prefix = fmt.Sprintf("Reminder %v: ", r.ID)
+	}
+	return twilhelp.SendSMS(r.Recipient, prefix+r.Description)
 }
 
 // Set r.NextRun to be in the future

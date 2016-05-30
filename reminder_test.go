@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRegex(t *testing.T) {
+func TestReminderRegex(t *testing.T) {
 	nowYear, nowMonth, nowDay := remind.Now().Date()
 
 	tests := []struct {
@@ -92,5 +92,38 @@ func TestRegex(t *testing.T) {
 
 		r, _ = parseReminder("", test.body+" daily")
 		assert.Equal(t, r.Period, 24*time.Hour, "Period is wrong (daily)")
+	}
+}
+
+func TestCancelRegex(t *testing.T) {
+	tests := []struct {
+		msg string
+		id  string
+	}{
+		{
+			"Stop 1",
+			"1",
+		},
+		{
+			"Delete #2",
+			"2",
+		},
+		{
+			"Delete Reminder  #3",
+			"3",
+		},
+		{
+			"Delete  reminder #3",
+			"3",
+		},
+	}
+
+	for _, test := range tests {
+		parts := regexStopReminder.FindStringSubmatch(test.msg)
+		if len(parts) == 0 {
+			t.Errorf("Error parsing `%s` into parts", test.msg)
+			continue
+		}
+		assert.Equal(t, test.id, parts[1])
 	}
 }
