@@ -146,7 +146,7 @@ func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 			" every %s +/- within %s after that\n",
 			r.Recipient, r.Description, r.Period, r.PlusMinus)
 
-		err := twilhelp.SendSMS(r.Recipient, r.Description)
+		err := r.SendSMS()
 		if err != nil {
 			log.Printf("Error sending SMS `%v` to `%v`: %v\n", r.Description,
 				r.Recipient, err)
@@ -186,6 +186,10 @@ func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 			// Keep going
 		}
 	}
+}
+
+func (r *Reminder) SendSMS() error {
+	return twilhelp.SendSMS(r.Recipient, r.Description)
 }
 
 // Set r.NextRun to be in the future
