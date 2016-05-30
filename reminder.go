@@ -9,29 +9,53 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/codegangsta/martini"
 	"github.com/elimisteve/do_reminder/remind"
 	"github.com/elimisteve/do_reminder/twilhelp"
 )
 
-var (
-	// TODO(elimisteve): Make timezone user-specific
-	LosAngeles, _ = time.LoadLocation("America/Los_Angeles")
-)
+func init() {
+	rand.Seed(remind.Now().Unix())
+}
 
 func main() {
-	rand.Seed(remind.Now().Unix())
+	// Load DB
+	options := &bolt.Options{Timeout: 2 * time.Second}
+	dbPath := path.Join(os.Getenv("BOLT_PATH"), "reminder.db")
+	db, err := bolt.Open(dbPath, 0600, options)
+	if err != nil {
+		log.Fatalf("Error opening bolt DB: %v", err)
+	}
+	defer db.Close()
+
+	// Schedule all (non-cancelled) Reminders
+	rems, err := remind.GetAllReminders(db)
+	if err != nil {
+		log.Fatalf("Error getting reminders: %v\n", err)
+	}
+	if err := rems.Schedule(); err != nil {
+		log.Fatal(err)
+	}
+
+	//
+	// Router, etc
+	//
 
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Action(r.Handle)
+
+	m.Map(db)
 
 	r.Post("/sms", incomingSMS)
 
@@ -44,7 +68,7 @@ func twilioResponse(s string) string {
 
 var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
 
-func incomingSMS(req *http.Request, log *log.Logger) string {
+func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 	now := remind.Now()
 	from := req.FormValue("From")
 	body := req.FormValue("Body")
@@ -72,9 +96,25 @@ func incomingSMS(req *http.Request, log *log.Logger) string {
 		Raw:     body,
 		Created: now,
 	}
+	reminder.SetDB(db)
+
+	err = reminder.Save()
+	if err != nil {
+		if err != nil {
+			log.Printf("Error saving reminder %#v: %v\n", reminder, err)
+		}
+
+		err2 := twilhelp.SendSMS(from, "Error saving your reminder. Sorry!")
+		if err2 != nil {
+			log.Printf(`Error sending "sorry we couldn't save" msg: %v\n`, err)
+		}
+
+		return twilioResponse("")
+	}
 
 	err = reminder.Schedule()
 	if err != nil {
+		log.Printf("Error scheduling reminder %#v: %v\n", reminder, err)
 		err2 := twilhelp.SendSMS(from, "Error scheduling your reminder. Sorry!")
 		if err2 != nil {
 			log.Printf("Error after successful parse but failed scheduling: %v\n", err2)
@@ -159,12 +199,12 @@ func parseTime(t string, times []string) (time.Time, error) {
 	day, _ := strconv.Atoi(monthDay[1])
 
 	nextRun = time.Date(now.Year(), time.Month(month), day,
-		hours, mins, 0, 0, LosAngeles)
+		hours, mins, 0, 0, remind.LosAngeles)
 
 	if nextRun.Before(now) {
 		// Next year
 		nextRun = time.Date(now.Year()+1, time.Month(month), day,
-			hours, mins, 0, 0, LosAngeles)
+			hours, mins, 0, 0, remind.LosAngeles)
 	}
 
 	return nextRun, nil

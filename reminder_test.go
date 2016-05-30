@@ -23,7 +23,7 @@ func TestRegex(t *testing.T) {
 			remind.Reminder{
 				Description: "buy milk",
 				NextRun: time.Date(nowYear, nowMonth, nowDay+1,
-					14, 45, 0, 0, LosAngeles),
+					14, 45, 0, 0, remind.LosAngeles),
 			},
 		},
 		{
@@ -31,7 +31,7 @@ func TestRegex(t *testing.T) {
 			remind.Reminder{
 				Description: "do $tuFF",
 				NextRun: time.Date(nowYear, nowMonth, nowDay,
-					23, 59, 0, 0, LosAngeles),
+					23, 59, 0, 0, remind.LosAngeles),
 			},
 		},
 		{
@@ -39,7 +39,7 @@ func TestRegex(t *testing.T) {
 			remind.Reminder{
 				Description: "do  whatever",
 				NextRun: time.Date(nowYear, nowMonth, nowDay,
-					23, 59, 0, 0, LosAngeles),
+					23, 59, 0, 0, remind.LosAngeles),
 			},
 		},
 		{
@@ -47,7 +47,7 @@ func TestRegex(t *testing.T) {
 			remind.Reminder{
 				Description: "write_GO/code!!.(?)",
 				NextRun: time.Date(nowYear, 12, 9,
-					23, 59, 0, 0, LosAngeles),
+					23, 59, 0, 0, remind.LosAngeles),
 			},
 		},
 	}
