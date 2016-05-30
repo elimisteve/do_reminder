@@ -21,7 +21,7 @@ func TestRegex(t *testing.T) {
 		{
 			"Remind me to buy milk at 14:45 tomorrow",
 			remind.Reminder{
-				Description: "buy milk",
+				Description: "Buy milk",
 				NextRun: time.Date(nowYear, nowMonth, nowDay+1,
 					14, 45, 0, 0, remind.LosAngeles),
 			},
@@ -29,7 +29,7 @@ func TestRegex(t *testing.T) {
 		{
 			"Remind me to do $tuFF at 23:59 today",
 			remind.Reminder{
-				Description: "do $tuFF",
+				Description: "Do $tuFF",
 				NextRun: time.Date(nowYear, nowMonth, nowDay,
 					23, 59, 0, 0, remind.LosAngeles),
 			},
@@ -37,7 +37,7 @@ func TestRegex(t *testing.T) {
 		{
 			"Remind me to do  whatever at 23:59",
 			remind.Reminder{
-				Description: "do  whatever",
+				Description: "Do  whatever",
 				NextRun: time.Date(nowYear, nowMonth, nowDay,
 					23, 59, 0, 0, remind.LosAngeles),
 			},
@@ -45,21 +45,34 @@ func TestRegex(t *testing.T) {
 		{
 			"  remind me to write_GO/code!!.(?)  @ 23:59 on  12/09",
 			remind.Reminder{
-				Description: "write_GO/code!!.(?)",
+				Description: "Write_GO/code!!.(?)",
 				NextRun: time.Date(nowYear, 12, 9,
 					23, 59, 0, 0, remind.LosAngeles),
+			},
+		},
+		{
+			"Remind me to take out the trash @ 18:00",
+			remind.Reminder{
+				Description: "Take out the trash",
+				NextRun: time.Date(nowYear, nowMonth, nowDay,
+					18, 00, 0, 0, remind.LosAngeles),
 			},
 		},
 	}
 
 	for _, test := range tests {
-		descrip, nextRun, _, err := parseBody(test.body)
+		r, err := parseReminder("", test.body)
 		if err != nil {
 			t.Errorf("Error parsing `%s`: %v", test.body, err)
 			continue
 		}
 
-		assert.Equal(t, descrip, test.rem.Description, "Description is wrong")
-		assert.Equal(t, nextRun, test.rem.NextRun, "NextRun is wrong")
+		assert.Equal(t, r.Description, test.rem.Description, "Description is wrong")
+		assert.Equal(t, r.NextRun, test.rem.NextRun, "NextRun is wrong")
+		assert.Equal(t, r.Period, time.Duration(0), "Period is wrong")
+		assert.Equal(t, r.PlusMinus, time.Duration(0), "PlusMinus is wrong")
+
+		r, _ = parseReminder("", test.body+" daily")
+		assert.Equal(t, r.Period, 24*time.Hour, "Period is wrong (daily)")
 	}
 }

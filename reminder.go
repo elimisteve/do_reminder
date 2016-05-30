@@ -66,10 +66,15 @@ func twilioResponse(s string) string {
 	return xml.Header + "<Response>\n" + s + "\n</Response>"
 }
 
-var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?`)
+// 0: (Entire message)
+// 1: (Description)
+// 2: @|at|around
+// 3: hh:mm (NextRun)
+// 4: (today|tonight|tomorrow|\d?\d/\d?\d)?
+// 5: (daily)?
+var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?\s*(daily)?`)
 
 func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
-	now := remind.Now()
 	from := req.FormValue("From")
 	body := req.FormValue("Body")
 
@@ -77,24 +82,10 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 
 	// Remind me to _ @ _
 
-	description, nextRun, plusMinus, err := parseBody(body)
+	reminder, err := parseReminder(from, body)
 	if err != nil {
 		log.Printf("Error parsing incoming message body: %v\n", err)
 		return twilioResponse("")
-	}
-
-	// TODO(elimisteve): Make this configurable
-	delta := 24 * time.Hour
-
-	reminder := &remind.Reminder{
-		Recipient:   from,
-		Description: strings.ToUpper(description[0:1]) + description[1:],
-		NextRun:     nextRun,
-		Period:      delta,
-		PlusMinus:   plusMinus,
-
-		Raw:     body,
-		Created: now,
 	}
 
 	err = reminder.Save(db)
@@ -130,30 +121,32 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 	return twilioResponse("")
 }
 
-func parseBody(body string) (string, time.Time, time.Duration, error) {
+func parseReminder(from, body string) (*remind.Reminder, error) {
 	parts := regexRemindMe.FindStringSubmatch(body)
-	if len(parts) < 4 {
+	if len(parts) < 6 {
 		err := errors.New("Could not schedule your reminder. Be sure to" +
 			" use military time (24-hour time) when saying something like," +
-			"\n\nRemind me to take out the trash @ 18:00")
+			"\n\nRemind me to take out the trash @ 18:00 daily")
 		log.Printf("Error sending after failed time parsing: %v\n", err)
-		return "", time.Time{}, 0, err
+		return nil, err
 	}
 
-	// len(parts) >= 4
+	// len(parts) >= 6
 
-	// log.Printf("parts == %#v\n", parts)
+	// log.Printf("%d parts == %#v\n", len(parts), parts)
 
 	// parts[0] is the entire SMS message; ignore
 	description := parts[1]
 	around := (parts[2] == "around")
-	nextRun, err := parseTime(parts[3], parts[4:])
+	nextRun, err := parseTime(parts[3], parts[4])
 	if err != nil {
-		return "", time.Time{}, 0, err
+		return nil, err
 	}
 
-	// TODO(elimisteve): Use parts[5:] for more advanced features,
-	// like reminders that aren't every day
+	var period time.Duration
+	if parts[5] == "daily" {
+		period = 24 * time.Hour
+	}
 
 	var plusMinus time.Duration
 	if around {
@@ -161,30 +154,39 @@ func parseBody(body string) (string, time.Time, time.Duration, error) {
 		plusMinus = 60 * time.Minute
 	}
 
-	return description, nextRun, plusMinus, nil
+	reminder := &remind.Reminder{
+		Recipient:   from,
+		Description: strings.ToUpper(description[0:1]) + description[1:],
+		NextRun:     nextRun,
+		Period:      period,
+		PlusMinus:   plusMinus,
+
+		Raw:     body,
+		Created: remind.Now(),
+	}
+
+	return reminder, nil
 }
 
-func parseTime(t string, times []string) (time.Time, error) {
-	when := strings.SplitN(t, ":", 2)
+func parseTime(hhmm string, day string) (time.Time, error) {
+	when := strings.SplitN(hhmm, ":", 2)
 	hours, _ := strconv.Atoi(when[0])
 	mins, _ := strconv.Atoi(when[1])
 
-	var nextRun time.Time
-
 	now := remind.Now()
 
-	if len(times) == 0 || times[0] == "today" || times[0] == "tonight" || times[0] == "tomorrow" || times[0] == "" {
+	if day == "" || day == "today" || day == "tonight" || day == "tomorrow" {
 		nowHours, nowMins, nowSecs := now.Clock()
 		today := now.
 			Add(time.Duration(-nowHours) * time.Hour).
 			Add(time.Duration(-nowMins) * time.Minute).
 			Add(time.Duration(-nowSecs) * time.Second)
 
-		nextRun = today.
+		nextRun := today.
 			Add(time.Duration(hours) * time.Hour).
 			Add(time.Duration(mins) * time.Minute)
 
-		if nextRun.Before(now) || (len(times) > 0 && times[0] == "tomorrow") {
+		if nextRun.Before(now) || day == "tomorrow" {
 			// Tomorrow
 			nextRun = nextRun.Add(24 * time.Hour)
 		}
@@ -192,18 +194,18 @@ func parseTime(t string, times []string) (time.Time, error) {
 		return nextRun, nil
 	}
 
-	// Guaranteed: times[0] is of the form `\d?\d/\d?\d`
+	// Guaranteed: day is of the form `\d?\d/\d?\d`
 
-	monthDay := strings.SplitN(times[0], "/", 2)
+	monthDay := strings.SplitN(day, "/", 2)
 	month, _ := strconv.Atoi(monthDay[0])
-	day, _ := strconv.Atoi(monthDay[1])
+	dayNum, _ := strconv.Atoi(monthDay[1])
 
-	nextRun = time.Date(now.Year(), time.Month(month), day,
+	nextRun := time.Date(now.Year(), time.Month(month), dayNum,
 		hours, mins, 0, 0, remind.LosAngeles)
 
 	if nextRun.Before(now) {
 		// Next year
-		nextRun = time.Date(now.Year()+1, time.Month(month), day,
+		nextRun = time.Date(now.Year()+1, time.Month(month), dayNum,
 			hours, mins, 0, 0, remind.LosAngeles)
 	}
 
