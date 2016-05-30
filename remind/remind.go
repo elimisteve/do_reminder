@@ -53,6 +53,7 @@ func GetAllReminders(db *bolt.DB) (Reminders, error) {
 			}
 
 			rem.ID = binary.BigEndian.Uint64(k)
+			rem.cancel = make(chan struct{})
 
 			allRems = append(allRems, &rem)
 
@@ -86,6 +87,9 @@ func (r *Reminder) Schedule(db *bolt.DB) error {
 func (r *Reminder) Check(db *bolt.DB) error {
 	if r == nil {
 		return errors.New("Cannot schedule nil *Reminder!")
+	}
+	if r.cancel == nil {
+		r.cancel = make(chan struct{})
 	}
 
 	if r.Period < 0 {
@@ -121,6 +125,10 @@ func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 	dur := max(r.NextRun.Sub(Now()), 0)
 
 	log.Printf("Reminder %v waiting %s before next run\n", r.ID, dur)
+
+	if r.cancel == nil {
+		r.cancel = make(chan struct{})
+	}
 
 	select {
 	case <-r.cancel:
