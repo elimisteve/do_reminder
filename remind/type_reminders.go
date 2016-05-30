@@ -18,3 +18,16 @@ func (rems Reminders) ByID(id uint64) (*Reminder, error) {
 
 	return nil, ErrReminderNotFound
 }
+
+func (rems Reminders) NotCancelled() Reminders {
+	var notCancelled Reminders
+
+	for _, rem := range rems {
+		if !rem.Cancelled {
+			notCancelled = append(notCancelled, rem)
+			continue
+		}
+	}
+
+	return notCancelled
+}

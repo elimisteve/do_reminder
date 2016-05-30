@@ -47,8 +47,7 @@ func main() {
 		log.Fatalf("Error getting reminders: %v\n", err)
 	}
 
-	runningReminders.Add(rems...)
-	runningReminders.Schedule(db)
+	runningReminders.Schedule(db, rems)
 
 	//
 	// Router, etc
@@ -117,7 +116,7 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 		return twilioResponse("")
 	}
 
-	err = reminder.Schedule(db)
+	err = runningReminders.ScheduleNew(db, reminder)
 	if err != nil {
 		log.Printf("Error scheduling reminder %#v: %v\n", reminder, err)
 		err2 := twilhelp.SendSMS(from, "Error scheduling your reminder. Sorry!")

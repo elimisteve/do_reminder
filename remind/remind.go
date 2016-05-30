@@ -88,6 +88,9 @@ func (r *Reminder) Check(db *bolt.DB) error {
 	if r == nil {
 		return errors.New("Cannot schedule nil *Reminder!")
 	}
+	if r.Cancelled {
+		return fmt.Errorf("Reminder %v already cancelled", r.ID)
+	}
 	if r.cancel == nil {
 		r.cancel = make(chan struct{})
 	}
