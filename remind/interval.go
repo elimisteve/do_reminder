@@ -17,7 +17,7 @@ func init() {
 // IntervalSMS sends to toNumber each message from msgs throughout the
 // day, from start to finish, where this interval is broken into
 // len(msgs) pieces.
-func IntervalSMS(toNumber string, msgs []string, start, finish time.Time) ([]*Reminder, error) {
+func IntervalSMS(toNumber string, msgs []string, start, finish time.Time) (Reminders, error) {
 	if len(toNumber) < 10 {
 		return nil, fmt.Errorf("Phone number '%s' is too short", toNumber)
 	}
@@ -31,7 +31,7 @@ func IntervalSMS(toNumber string, msgs []string, start, finish time.Time) ([]*Re
 	// E.g., 12pm to 5pm. If len(msgs) == 4, oneChunk == 1.25h
 	oneChunk := finish.Sub(start) / time.Duration(len(msgs))
 
-	reminders := make([]*Reminder, len(msgs))
+	reminders := make(Reminders, len(msgs))
 
 	nMsgs := len(msgs)
 	for i := 0; i < nMsgs; i++ {

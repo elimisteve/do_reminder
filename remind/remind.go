@@ -93,8 +93,8 @@ func (r *Reminder) Schedule(db *bolt.DB) error {
 
 	if r.NextRun.Before(Now()) {
 		if r.Period == 0 {
-			log.Printf("Reminder %#v's next run already passed, should have"+
-				" only run once; returning nil\n", r)
+			log.Printf("Reminder %v's next run already passed, should have"+
+				" only run once; returning nil\n", r.ID)
 			r.Cancelled = true
 			return r.Update(db)
 		}
@@ -131,17 +131,20 @@ func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 	// Sleep till the next run is here
 	dur := max(r.NextRun.Sub(Now()), 0)
 
+	log.Printf("Reminder %v waiting %s before next run\n", r.ID, dur)
+
 	select {
 	case <-r.cancel:
-		log.Printf("Reminder %#v cancelled; returning\n", r)
+		log.Printf("Reminder %v cancelled; returning\n", r.ID)
 		return nil
 	case <-time.After(dur):
 		// Keep going
 	}
 
 	for {
-		log.Printf("Texting `%s` to remind him/her to `%s` starting now then every ~%s after that\n",
-			r.Recipient, r.Description, r.Period)
+		log.Printf("Texting `%s` to remind him/her to `%s` starting now then"+
+			" every %s +/- within %s after that\n",
+			r.Recipient, r.Description, r.Period, r.PlusMinus)
 
 		err := twilhelp.SendSMS(r.Recipient, r.Description)
 		if err != nil {
@@ -154,8 +157,8 @@ func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 
 		if r.Period == 0 {
 			if err != nil {
-				log.Printf("PROBLEM: Reminder %#v should only send once, but "+
-					"failed to send; erroring out, not trying again\n", r)
+				log.Printf("PROBLEM: Reminder %v should only send once, but "+
+					"failed to send; erroring out, not trying again\n", r.ID)
 				return err
 			}
 			log.Printf("Reminder %v successfully ran once; exiting\n", r.ID)
@@ -177,7 +180,7 @@ func (r *Reminder) RunAndLoop(db *bolt.DB) error {
 
 		select {
 		case <-r.cancel:
-			log.Printf("Reminder %#v cancelled; returning\n", r)
+			log.Printf("Reminder %v cancelled; returning\n", r.ID)
 			return nil
 		case <-time.After(max(sleep, -sleep)):
 			// Keep going
