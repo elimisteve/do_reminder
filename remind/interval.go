@@ -22,7 +22,8 @@ func IntervalSMS(toNumber string, msgs []string, start, finish time.Time) (Remin
 		return nil, fmt.Errorf("Phone number '%s' is too short", toNumber)
 	}
 	if !start.Before(finish) {
-		return nil, fmt.Errorf("start time %s must be before finish %s", start, finish)
+		return nil, fmt.Errorf("start time '%s' must be before finish '%s'",
+			start, finish)
 	}
 	if len(msgs) == 0 {
 		return nil, errors.New("No messages included")
