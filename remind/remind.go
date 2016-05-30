@@ -33,6 +33,7 @@ type Reminder struct {
 	Created time.Time
 
 	Cancelled bool
+	cancel    chan struct{}
 
 	db *bolt.DB
 }
@@ -133,7 +134,13 @@ func (r *Reminder) runAndLoop() error {
 	// Sleep till the next run is here
 	dur := max(r.NextRun.Sub(Now()), 0)
 
-	time.Sleep(dur)
+	select {
+	case <-r.cancel:
+		log.Printf("Reminder %#v cancelled; returning\n", r)
+		return nil
+	case <-time.After(dur):
+		// Keep going
+	}
 
 	for {
 		log.Printf("Texting `%s` to remind him/her to `%s` starting now then every ~%s after that\n",
@@ -171,7 +178,13 @@ func (r *Reminder) runAndLoop() error {
 			return err
 		}
 
-		time.Sleep(max(sleep, -sleep))
+		select {
+		case <-r.cancel:
+			log.Printf("Reminder %#v cancelled; returning\n", r)
+			return nil
+		case <-time.After(max(sleep, -sleep)):
+			// Keep going
+		}
 	}
 }
 
@@ -234,6 +247,18 @@ func (r *Reminder) Update() error {
 
 		return b.Put(r.IDBytes(), rBytes)
 	})
+}
+
+func (r *Reminder) Cancel() error {
+	r.cancel <- struct{}{}
+	r.Cancelled = true
+
+	err := r.Update()
+	if err != nil {
+		return fmt.Errorf(
+			"Cancelled currently-running Reminder, but failed to save: %v", err)
+	}
+	return nil
 }
 
 func (r *Reminder) SetDB(db *bolt.DB) {
