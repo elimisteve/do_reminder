@@ -161,6 +161,14 @@ func handleCancel(db *bolt.DB, from, idStr string) string {
 		return twilioResponse("")
 	}
 
+	reply := fmt.Sprintf("Reminder %v successfully stopped. Have an epic day!",
+		id)
+	err = twilhelp.SendSMS(from, reply)
+	if err != nil {
+		log.Printf(`Error sending "reminder %v successfully stopped": %v\n`, id,
+			err)
+	}
+
 	return twilioResponse("")
 }
 
