@@ -40,7 +40,9 @@ func main() {
 	finishHour, _ := strconv.Atoi(finishStr[:2])
 	finishMinute, _ := strconv.Atoi(finishStr[3:])
 
-	year, month, day := remind.Now().Date()
+	now := remind.Now()
+
+	year, month, day := now.Date()
 	start := time.Date(year, month, day, startHour, startMinute,
 		0, 0, remind.LosAngeles)
 	finish := time.Date(year, month, day, finishHour, finishMinute,
@@ -58,12 +60,22 @@ func main() {
 		go func(rem *remind.Reminder) {
 			defer wg.Done()
 
-			if err := rem.RunAndLoop(nil); err != nil {
-				log.Printf("Error scheduling Reminder `%v` to %s: %v\n",
+			if rem.NextRun.Before(now) {
+				log.Printf("Reminder `%s` scheduled for the past (%s ago); not running\n",
+					rem.Description, now.Sub(rem.NextRun))
+				return
+			}
+
+			sleep := rem.NextRun.Sub(now)
+			log.Printf("Reminder `%s` will run in %s\n", rem.Description, sleep)
+			time.Sleep(sleep)
+
+			if err := rem.SendSMS(); err != nil {
+				log.Printf("Error sending Reminder `%v` to %s: %v\n",
 					rem.Description, rem.Recipient, err)
 				return
 			}
-			log.Printf("Reminder `%s` exited cleanly\n", rem.Description)
+			log.Printf("Reminder `%s` sent successfully\n", rem.Description)
 		}(rem)
 	}
 
