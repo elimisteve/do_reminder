@@ -70,9 +70,10 @@ func twilioResponse(s string) string {
 // 1: (Description)
 // 2: @|at|around
 // 3: hh:mm (NextRun)
-// 4: (today|tonight|tomorrow|\d?\d/\d?\d)?
-// 5: (daily)?
-var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?\s*(daily)?`)
+// 4: (starting)?
+// 5: (today|tonight|tomorrow|\d?\d/\d?\d)?
+// 6: (daily)?
+var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(starting)?\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?\s*(daily)?`)
 
 func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 	from := req.FormValue("From")
@@ -123,7 +124,7 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 
 func parseReminder(from, body string) (*remind.Reminder, error) {
 	parts := regexRemindMe.FindStringSubmatch(body)
-	if len(parts) < 6 {
+	if len(parts) < 7 {
 		err := errors.New("Could not schedule your reminder. Be sure to" +
 			" use military time (24-hour time) when saying something like," +
 			"\n\nRemind me to take out the trash @ 18:00 daily")
@@ -131,20 +132,22 @@ func parseReminder(from, body string) (*remind.Reminder, error) {
 		return nil, err
 	}
 
-	// len(parts) >= 6
+	// len(parts) >= 7
 
 	// log.Printf("%d parts == %#v\n", len(parts), parts)
 
 	// parts[0] is the entire SMS message; ignore
 	description := parts[1]
 	around := (parts[2] == "around")
-	nextRun, err := parseTime(parts[3], parts[4])
+	nextRun, err := parseTime(parts[3], parts[5])
 	if err != nil {
 		return nil, err
 	}
 
+	impliedDaily := (parts[4] == "starting")
+
 	var period time.Duration
-	if parts[5] == "daily" {
+	if impliedDaily || parts[6] == "daily" {
 		period = 24 * time.Hour
 	}
 

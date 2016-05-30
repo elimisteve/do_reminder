@@ -58,6 +58,24 @@ func TestRegex(t *testing.T) {
 					18, 00, 0, 0, remind.LosAngeles),
 			},
 		},
+		{
+			"Remind me to take out the trash @ 18:00 starting 1/1",
+			remind.Reminder{
+				Description: "Take out the trash",
+				NextRun: time.Date(nowYear+1, 1, 1,
+					18, 00, 0, 0, remind.LosAngeles),
+				Period: 24 * time.Hour,
+			},
+		},
+		{
+			"Remind me to take out the trash @ 18:00 on 1/1 daily",
+			remind.Reminder{
+				Description: "Take out the trash",
+				NextRun: time.Date(nowYear+1, 1, 1,
+					18, 00, 0, 0, remind.LosAngeles),
+				Period: 24 * time.Hour,
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -69,7 +87,7 @@ func TestRegex(t *testing.T) {
 
 		assert.Equal(t, r.Description, test.rem.Description, "Description is wrong")
 		assert.Equal(t, r.NextRun, test.rem.NextRun, "NextRun is wrong")
-		assert.Equal(t, r.Period, time.Duration(0), "Period is wrong")
+		assert.Equal(t, r.Period, test.rem.Period, "Period is wrong")
 		assert.Equal(t, r.PlusMinus, time.Duration(0), "PlusMinus is wrong")
 
 		r, _ = parseReminder("", test.body+" daily")
