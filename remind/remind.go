@@ -34,19 +34,17 @@ type Reminder struct {
 
 	Cancelled bool
 	cancel    chan struct{}
-
-	db *bolt.DB
 }
 
 type Reminders []*Reminder
 
-func (rems Reminders) Schedule() []error {
+func (rems Reminders) Schedule(db *bolt.DB) []error {
 	var errs []error
 	for _, r := range rems {
 		if r.Cancelled {
 			continue
 		}
-		if err := r.Schedule(); err != nil {
+		if err := r.Schedule(db); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -70,7 +68,6 @@ func GetAllReminders(db *bolt.DB) (Reminders, error) {
 			}
 
 			rem.ID = binary.BigEndian.Uint64(k)
-			rem.db = db
 
 			allRems = append(allRems, &rem)
 
@@ -83,7 +80,7 @@ func GetAllReminders(db *bolt.DB) (Reminders, error) {
 
 // Schedule reminds r.Recipient to do r.Description starting at
 // r.NextRun, then every r.Period +/- r.PlusMinus after that.
-func (r *Reminder) Schedule() error {
+func (r *Reminder) Schedule(db *bolt.DB) error {
 	if r == nil {
 		errors.New("Cannot schedule nil *Reminder!")
 	}
@@ -99,21 +96,21 @@ func (r *Reminder) Schedule() error {
 			log.Printf("Reminder %#v's next run already passed, should have"+
 				" only run once; returning nil\n", r)
 			r.Cancelled = true
-			return r.Update()
+			return r.Update(db)
 		}
 		changed, err := r.FutureizeNextRun()
 		if err != nil {
 			return err
 		}
 		if changed {
-			if err := r.Update(); err != nil {
+			if err := r.Update(db); err != nil {
 				return err
 			}
 		}
 	}
 
 	go func() {
-		if err := r.runAndLoop(); err != nil {
+		if err := r.runAndLoop(db); err != nil {
 			log.Printf("Error running looping reminder %v: %v\n", r.ID, err)
 			return
 		}
@@ -123,10 +120,10 @@ func (r *Reminder) Schedule() error {
 	return nil
 }
 
-func (r *Reminder) runAndLoop() error {
+func (r *Reminder) runAndLoop(db *bolt.DB) error {
 	r.NextRun = r.NextRun.Add(RandDuration(r.PlusMinus))
 	if r.PlusMinus != 0 {
-		if err := r.Update(); err != nil {
+		if err := r.Update(db); err != nil {
 			return fmt.Errorf("Error updating reminder: %v", err)
 		}
 	}
@@ -163,7 +160,7 @@ func (r *Reminder) runAndLoop() error {
 			}
 			log.Printf("Reminder %v successfully ran once; exiting\n", r.ID)
 			r.Cancelled = true
-			return r.Update()
+			return r.Update(db)
 		}
 
 		// TODO: Prevent drift. Right now there's nothing stopping
@@ -174,7 +171,7 @@ func (r *Reminder) runAndLoop() error {
 			r.Recipient, r.Description, sleep, r.Period)
 
 		r.NextRun = Now().Add(sleep)
-		if err := r.Update(); err != nil {
+		if err := r.Update(db); err != nil {
 			return err
 		}
 
@@ -211,8 +208,8 @@ func max(n, m time.Duration) time.Duration {
 	return m
 }
 
-func (r *Reminder) Save() error {
-	return r.db.Update(func(tx *bolt.Tx) error {
+func (r *Reminder) Save(db *bolt.DB) error {
+	return db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists(boltBucket)
 		if err != nil {
 			return err
@@ -230,14 +227,14 @@ func (r *Reminder) Save() error {
 	})
 }
 
-func (r *Reminder) Update() error {
+func (r *Reminder) Update(db *bolt.DB) error {
 	if r == nil {
 		return errors.New("Cannot update nil *Reminder")
 	}
 
 	log.Printf("Updating reminder %v\n", r.ID)
 
-	return r.db.Update(func(tx *bolt.Tx) error {
+	return db.Update(func(tx *bolt.Tx) error {
 		rBytes, err := json.Marshal(r)
 		if err != nil {
 			return err
@@ -249,20 +246,16 @@ func (r *Reminder) Update() error {
 	})
 }
 
-func (r *Reminder) Cancel() error {
+func (r *Reminder) Cancel(db *bolt.DB) error {
 	r.cancel <- struct{}{}
 	r.Cancelled = true
 
-	err := r.Update()
+	err := r.Update(db)
 	if err != nil {
 		return fmt.Errorf(
 			"Cancelled currently-running Reminder, but failed to save: %v", err)
 	}
 	return nil
-}
-
-func (r *Reminder) SetDB(db *bolt.DB) {
-	r.db = db
 }
 
 func (r *Reminder) IDBytes() []byte {

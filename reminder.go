@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error getting reminders: %v\n", err)
 	}
-	if err := rems.Schedule(); err != nil {
+	if err := rems.Schedule(db); err != nil {
 		log.Fatal(err)
 	}
 
@@ -96,9 +96,8 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 		Raw:     body,
 		Created: now,
 	}
-	reminder.SetDB(db)
 
-	err = reminder.Save()
+	err = reminder.Save(db)
 	if err != nil {
 		if err != nil {
 			log.Printf("Error saving reminder %#v: %v\n", reminder, err)
@@ -112,7 +111,7 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 		return twilioResponse("")
 	}
 
-	err = reminder.Schedule()
+	err = reminder.Schedule(db)
 	if err != nil {
 		log.Printf("Error scheduling reminder %#v: %v\n", reminder, err)
 		err2 := twilhelp.SendSMS(from, "Error scheduling your reminder. Sorry!")
