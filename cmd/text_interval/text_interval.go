@@ -67,5 +67,5 @@ func main() {
 
 	wg.Wait()
 
-	log.Printf("\nAll %d Reminders finished; exiting\n", len(reminders))
+	log.Printf("All %d Reminders finished; exiting\n", len(reminders))
 }

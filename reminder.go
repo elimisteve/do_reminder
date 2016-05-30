@@ -122,7 +122,8 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 		return twilioResponse("")
 	}
 
-	err = twilhelp.SendSMS(from, "Reminder successfully scheduled! Have a great day :-)")
+	err = twilhelp.SendSMS(from, "Reminder successfully scheduled! Have a"+
+		" great day :-)")
 	if err != nil {
 		log.Printf("Error from post-successful scheduling send: %v\n", err)
 	}
@@ -132,7 +133,7 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 
 func parseBody(body string) (string, time.Time, time.Duration, error) {
 	parts := regexRemindMe.FindStringSubmatch(body)
-	if len(parts) < 3 {
+	if len(parts) < 4 {
 		err := errors.New("Could not schedule your reminder. Be sure to" +
 			" use military time (24-hour time) when saying something like," +
 			"\n\nRemind me to take out the trash @ 18:00")
@@ -140,7 +141,7 @@ func parseBody(body string) (string, time.Time, time.Duration, error) {
 		return "", time.Time{}, 0, err
 	}
 
-	// len(parts) >= 3
+	// len(parts) >= 4
 
 	// log.Printf("parts == %#v\n", parts)
 
