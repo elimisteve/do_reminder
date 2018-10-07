@@ -4,8 +4,11 @@
 package twilhelp
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/subosito/twilio"
 )
@@ -34,11 +37,24 @@ func init() {
 	}
 }
 
-func SendSMS(toNumber, msg string) error {
-	if len(toNumber) == 10 {
-		toNumber = "+1" + toNumber
-	}
+func SendSMS(toNumberOrig, msg string) error {
+	toNumber := cleanNumber(toNumberOrig)
+	fmt.Printf("Cleaned: %s => %s\n", toNumberOrig, toNumber)
 	params := twilio.MessageParams{Body: msg}
 	_, _, err := tc.Messages.Send(FromNumber, toNumber, params)
 	return err
+}
+
+var reNumber = regexp.MustCompile(`\d+`)
+
+func cleanNumber(toNumberOrig string) string {
+	digits := reNumber.FindAllString(toNumberOrig, -1)
+	num := strings.Join(digits, "")
+	if len(num) == 10 {
+		num = "+1" + num
+	}
+	if !strings.HasPrefix(num, "+") {
+		num = "+" + num
+	}
+	return num
 }
