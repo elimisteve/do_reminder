@@ -77,7 +77,7 @@ func twilioResponse(s string) string {
 // 4: (starting)?
 // 5: (today|tonight|tomorrow|\d?\d/\d?\d)?
 // 6: (daily)?
-var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(starting)?\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?\s*(daily)?`)
+var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me (?:to|that) (.+?)\s*(@|at|around)\s*(\d?\d:?\d\d)\s*(starting)?\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?\s*(daily)?`)
 
 // 0: (Entire message)
 // 1: Reminder ID(s)

@@ -21,6 +21,12 @@ func TestIntervalSMS(t *testing.T) {
 		{now, now.Add(3 * time.Minute), []string{
 			"Message 0", "Message 1", "Message 2",
 		}},
+		{now, now.Add(1 * time.Minute), []string{
+			"Message 0 or 4",
+		}},
+		{now, now.Add(3 * time.Minute), []string{
+			"Message 0 or 5",
+		}},
 	}
 
 	for _, test := range tests {
