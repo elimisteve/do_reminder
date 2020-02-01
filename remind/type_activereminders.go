@@ -4,6 +4,7 @@
 package remind
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -16,18 +17,40 @@ type ActiveReminders struct {
 	reminders Reminders
 }
 
-func (active *ActiveReminders) Cancel(db *bolt.DB, id uint64) error {
+func (active *ActiveReminders) Cancel(db *bolt.DB, ids []uint64) error {
 	active.mu.Lock()
 	defer active.mu.Unlock()
 
-	r, err := active.reminders.ByID(id)
-	if err != nil {
-		return err
+	errs := []string{}
+
+	for _, id := range ids {
+		r, err := active.reminders.ByID(id)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf(
+				"Error getting reminder #%d: %v", id, err.Error()))
+			continue
+		}
+
+		active.remove(r.ID)
+
+		cancErr := r.Cancel(db)
+		if cancErr != err {
+			errs = append(errs, err.Error())
+			continue
+		}
 	}
 
-	active.remove(r.ID)
+	if len(errs) == 1 {
+		return errors.New(errs[0])
+	} else if len(errs) != 0 {
+		errStr := errs[0]
+		for i := 1; i < len(errs); i++ {
+			errStr += "; " + errs[i]
+		}
+		return fmt.Errorf("Got %d errors: %v", len(errs), errStr)
+	}
 
-	return r.Cancel(db)
+	return nil
 }
 
 func (active *ActiveReminders) add(rems ...*Reminder) {

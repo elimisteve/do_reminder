@@ -80,8 +80,8 @@ func twilioResponse(s string) string {
 var regexRemindMe = regexp.MustCompile(`^\s*[Rr]emind me to (.+?)\s*(@|at|around)\s*(\d?\d:\d\d)\s*(starting)?\s*(?:on)?\s*(today|tonight|tomorrow|\d?\d/\d?\d)?\s*(daily)?`)
 
 // 0: (Entire message)
-// 1: Reminder ID
-var regexStopReminder = regexp.MustCompile(`(?:[Ss]top|[Dd]elete)\s*(?:[Rr]eminder)?\s*#?(\d+)`)
+// 1: Reminder ID(s)
+var regexStopReminder = regexp.MustCompile(`(?:[Ss]top|[Dd]elete)\s*(?:[Rr]eminder)?\s*#?([\d ,]+)`)
 
 func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 	from := req.FormValue("From")
@@ -137,22 +137,38 @@ func incomingSMS(db *bolt.DB, req *http.Request, log *log.Logger) string {
 }
 
 func handleCancel(db *bolt.DB, from, idStr string) string {
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		log.Printf("Error parsing Reminder ID: %v\n", err)
+	idStr = strings.ReplaceAll(idStr, ",", " ")
+	idStrs := strings.Split(idStr, " ")
 
-		err2 := twilhelp.SendSMS(from, "Error parsing the Reminder ID. Sorry!")
-		if err2 != nil {
-			log.Printf(`Error sending "sorry we couldn't parse" msg: %v\n`, err)
+	var goodIds []uint64
+
+	for i, idStr := range idStrs {
+		if idStr == "" {
+			continue
+		}
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			if i == 0 {
+				log.Printf("Error parsing Reminder ID: %v\n", err)
+
+				err2 := twilhelp.SendSMS(from, "Error parsing the Reminder ID. Sorry!")
+				if err2 != nil {
+					log.Printf(`Error sending "sorry we couldn't parse" msg: %v\n`, err)
+				}
+
+				return twilioResponse("")
+			}
+
+			continue
 		}
 
-		return twilioResponse("")
+		goodIds = append(goodIds, id)
 	}
 
-	if err := runningReminders.Cancel(db, id); err != nil {
-		log.Printf("Error cancelling Reminder %v: %v\n", id, err)
+	if err := runningReminders.Cancel(db, goodIds); err != nil {
+		//log.Printf("Error cancelling Reminder %v: %v\n", id, err)
 
-		reply := fmt.Sprintf("Error stopping Reminder %v. Sorry!", id)
+		reply := fmt.Sprintf("Error stopping Reminder(s) %v. Sorry!", goodIds)
 		err2 := twilhelp.SendSMS(from, reply)
 		if err2 != nil {
 			log.Printf(`Error sending "sorry we couldn't cancel" msg: %v\n`, err)
@@ -161,14 +177,12 @@ func handleCancel(db *bolt.DB, from, idStr string) string {
 		return twilioResponse("")
 	}
 
-	reply := fmt.Sprintf("Reminder %v successfully stopped. Have an epic day!",
-		id)
-	err = twilhelp.SendSMS(from, reply)
+	reply := fmt.Sprintf("Reminder(s) %v successfully stopped. Have an epic day!", goodIds)
+	err := twilhelp.SendSMS(from, reply)
 	if err != nil {
-		log.Printf(`Error sending "reminder %v successfully stopped": %v\n`, id,
+		log.Printf(`Error sending "reminder %v successfully stopped": %v\n`, goodIds,
 			err)
 	}
-
 	return twilioResponse("")
 }
 
